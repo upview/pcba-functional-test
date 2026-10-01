@@ -2,15 +2,15 @@ from plugs.daq import GPIO_CHANNELS
 
 
 def gpio_loopback(measurements, dut, daq, ui, log):
+    """DUT drives each GPIO high then low; the fixture reads it back through the loopback."""
     failed = []
-    for ch in range(GPIO_CHANNELS):
+    for channel in range(GPIO_CHANNELS):
         for level in (1, 0):
-            dut.set_gpio(ch, level)
-            daq.drive_gpio_from_dut(ch, level)  # mock: the loopback jumper
-            if daq.read_gpio(ch) != level:
-                failed.append(ch)
+            dut.set_gpio(channel, level)
+            if daq.read_gpio(channel) != level:
+                failed.append(channel)
                 break
-        ui.loopback_progress = int((ch + 1) / GPIO_CHANNELS * 100)
+        ui.loopback_progress = int((channel + 1) / GPIO_CHANNELS * 100)
 
     measurements.gpio_pass_count = GPIO_CHANNELS - len(failed)
     measurements.gpio_failed_channels = failed
