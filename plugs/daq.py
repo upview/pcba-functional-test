@@ -5,7 +5,7 @@ Swap for an nidaqmx implementation; the phases stay unchanged.
 
 import numpy as np
 
-from plugs import bench
+from plugs import mock_wiring
 
 GPIO_CHANNELS = 32
 RAILS_V = {"3v3": 3.30, "5v": 5.00, "1v8": 1.80}
@@ -32,11 +32,11 @@ class FixtureDaq:
 
     def read_gpio(self, channel):
         """Level seen on the fixture side of loopback channel `channel`."""
-        return bench.read(f"gpio{channel}", 0)
+        return mock_wiring.read(f"gpio{channel}", 0)
 
     def set_stimulus(self, volts):
         """Drive the analog output wired to the DUT ADC input."""
-        bench.write("stimulus_v", float(volts))
+        mock_wiring.write("stimulus_v", float(volts))
 
     def photodiode_mv(self, led):
         return PHOTODIODE_MV[led] + self._rng.normal(0.0, 4.0)

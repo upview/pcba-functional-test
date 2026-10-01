@@ -24,4 +24,4 @@ tofupilot run . --json --ui-values ui.json    # unattended
 
 ## Use Real Hardware
 
-Replace the mocks in `plugs/`: `psu.py` with pyvisa, `daq.py` with nidaqmx, `dut.py` with pyserial. Delete `plugs/bench.py`, which only simulates the wiring between the mocks. The phases, measurements and limits stay the same.
+Replace the mocks in `plugs/`: `psu.py` with pyvisa, `daq.py` with nidaqmx, `dut.py` with pyserial. Delete `plugs/mock_wiring.py`, which only simulates the wiring between the mocks. The phases, measurements and limits stay the same.

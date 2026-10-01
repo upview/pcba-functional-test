@@ -7,7 +7,7 @@ Swap for a pyserial implementation; the phases stay unchanged.
 
 import numpy as np
 
-from plugs import bench
+from plugs import mock_wiring
 
 ADC_FS_V = 3.3
 ADC_BITS = 12
@@ -31,11 +31,11 @@ class DutSerial:
         return "C"
 
     def set_gpio(self, channel, level):
-        bench.write(f"gpio{channel}", level)
+        mock_wiring.write(f"gpio{channel}", level)
 
     def read_adc_volts(self):
         """ADC reading the firmware reports for the voltage on its input pin, in volts."""
-        v = bench.read("stimulus_v", 0.0) * self._gain + self._offset_v + self._rng.normal(0.0, 0.0006)
+        v = mock_wiring.read("stimulus_v", 0.0) * self._gain + self._offset_v + self._rng.normal(0.0, 0.0006)
         code = round(np.clip(v, 0.0, ADC_FS_V) / ADC_FS_V * (2**ADC_BITS - 1))
         return code / (2**ADC_BITS - 1) * ADC_FS_V
 

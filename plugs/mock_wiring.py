@@ -1,4 +1,4 @@
-"""Simulated wiring of the mock bench.
+"""Simulated wiring between the mock plugs.
 
 On a real fixture the DUT and the DAQ are wired together: a GPIO the DUT
 drives shows up on a DAQ input, a voltage the DAQ outputs reaches a DUT ADC
@@ -12,7 +12,7 @@ import os
 import tempfile
 from pathlib import Path
 
-_DIR = Path(tempfile.gettempdir()) / "pcba-fct-mock-bench"
+_DIR = Path(tempfile.gettempdir()) / "pcba-fct-mock-wiring"
 _DIR.mkdir(exist_ok=True)
 
 
