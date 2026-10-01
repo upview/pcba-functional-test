@@ -1,0 +1,7 @@
+{
+  "operator_checks": {
+    "status_led": true,
+    "fault_led": true,
+    "buzzer": true
+  }
+}

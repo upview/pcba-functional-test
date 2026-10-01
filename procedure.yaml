@@ -1,0 +1,258 @@
+name: PCBA Functional Test
+version: 0.1.0
+description: Powers a PCBA on a pogo-pin fixture with a soft-start ramp, checks rails and inrush, talks to the firmware test mode, exercises GPIO and ADC, records operator checks, and measures stop-mode current.
+
+unit:
+  auto_identify: true
+  serial_number:
+    description: "Scan the board data-matrix"
+    placeholder: "UAUT-00000"
+    pattern: "^UAUT-\\d{5}$"
+    default_value: "UAUT-04829"
+  part_number:
+    default_value: "PCB-MAIN-V2"
+  metadata:
+    firmware_version:
+      description: "Reported by the DUT over UART"
+
+plugs:
+  - name: Fixture Supply
+    description: Programmable DC supply on Vin with inrush capture (mock)
+    python: plugs.psu:FixtureSupply
+    key: psu
+  - name: Fixture DAQ
+    description: Rail sense, 32-channel GPIO loopback, AWG stimulus, LED photodiodes (mock)
+    python: plugs.daq:FixtureDaq
+    key: daq
+  - name: DUT Serial
+    description: Firmware test mode over the fixture UART (mock)
+    python: plugs.dut:DutSerial
+    key: dut
+
+setup:
+  - name: Fixture Check
+    key: fixture_check
+    python: phases.fixture_check
+    measurements:
+      - name: Lid Closed
+        key: lid_closed
+        validators:
+          - {operator: "==", expected_value: true}
+      - name: Vacuum
+        key: vacuum_kpa
+        unit: kPa
+        description: Chamber pressure confirming the DUT is seated on the probes.
+        validators:
+          - {operator: "<=", expected_value: -50.0}
+
+main:
+  - name: Power On
+    key: power_on
+    python: phases.power_on
+    measurements:
+      - name: Inrush
+        key: inrush
+        title: Vin ramp and input current
+        description: 50 ms soft-start ramp to 12 V, input current sampled at 100 kS/s.
+        x_axis:
+          legend: Time
+          unit: ms
+        y_axis:
+          - legend: Vin
+            key: vin
+            unit: V
+          - legend: Input current
+            key: iin
+            unit: mA
+            aggregations:
+              - type: peak_ma
+                unit: mA
+                validators:
+                  - {operator: "<=", expected_value: 400.0}
+              - type: steady_ma
+                unit: mA
+                validators:
+                  - {operator: ">=", expected_value: 70.0}
+                  - {operator: "<=", expected_value: 110.0}
+      - name: 3V3 Rail
+        key: rail_3v3
+        unit: V
+        validators:
+          - {operator: ">=", expected_value: 3.135}
+          - {operator: "<=", expected_value: 3.465}
+      - name: 5V Rail
+        key: rail_5v
+        unit: V
+        validators:
+          - {operator: ">=", expected_value: 4.75}
+          - {operator: "<=", expected_value: 5.25}
+      - name: 1V8 Rail
+        key: rail_1v8
+        unit: V
+        validators:
+          - {operator: ">=", expected_value: 1.71}
+          - {operator: "<=", expected_value: 1.89}
+      - name: 3V3 Ripple
+        key: ripple_3v3
+        unit: mVpp
+        validators:
+          - {operator: "<=", expected_value: 30.0}
+
+  - name: DUT Handshake
+    key: dut_handshake
+    python: phases.dut_handshake
+    depends_on: [power_on]
+    measurements:
+      - name: Test Mode
+        key: test_mode
+        validators:
+          - {operator: "==", expected_value: true}
+      - name: Firmware Version
+        key: firmware_version
+        validators:
+          - {operator: in, expected_value: ["2.4.1"]}
+      - name: Hardware Revision
+        key: hardware_revision
+        validators:
+          - {operator: in, expected_value: ["B", "C"]}
+
+  - name: GPIO Loopback
+    key: gpio_loopback
+    python: phases.gpio_loopback
+    depends_on: [dut_handshake]
+    ui:
+      components:
+        - key: loopback_progress
+          type: progress
+          label: "GPIO loopback"
+          description: "32 channels, high and low"
+          default_value: 0
+          max: 100
+    measurements:
+      - name: GPIO Pass Count
+        key: gpio_pass_count
+        validators:
+          - {operator: "==", expected_value: 32}
+      - name: GPIO Failed Channels
+        key: gpio_failed_channels
+        description: Channels whose loopback readback did not follow the DUT drive.
+        validators:
+          - {operator: "==", expected_value: []}
+
+  - name: Analog Linearity
+    key: analog_linearity
+    python: phases.analog_linearity
+    depends_on: [dut_handshake]
+    ui:
+      components:
+        - key: sweep_progress
+          type: progress
+          label: "ADC sweep"
+          description: "32 stimulus steps from 0.1 V to 3.2 V"
+          default_value: 0
+          max: 100
+    measurements:
+      - name: ADC Sweep
+        key: adc_sweep
+        title: ADC reading vs fixture stimulus
+        x_axis:
+          legend: Stimulus
+          unit: V
+        y_axis:
+          - legend: Reading
+            key: reading
+            unit: V
+            aggregations:
+              - type: gain_error_pct
+                unit: "%"
+                validators:
+                  - {operator: ">=", expected_value: -0.5}
+                  - {operator: "<=", expected_value: 0.5}
+              - type: offset_mv
+                unit: mV
+                validators:
+                  - {operator: ">=", expected_value: -5.0}
+                  - {operator: "<=", expected_value: 5.0}
+              - type: r2
+                validators:
+                  - {operator: ">=", expected_value: 0.9999}
+          - legend: Residual
+            key: residual
+            unit: mV
+
+  - name: Operator Checks
+    key: operator_checks
+    python: phases.operator_checks
+    depends_on: [dut_handshake]
+    ui:
+      components:
+        - key: instructions
+          type: text
+          label: "Look at the board and listen"
+          default_value: "The status LED must be green, the fault LED must stay off, and the buzzer chirps once. Tick what you observed."
+        - key: status_led
+          type: switch
+          label: "Status LED is green"
+          required: true
+          bind: measurements.status_led_seen
+        - key: fault_led
+          type: switch
+          label: "Fault LED is off"
+          required: true
+          bind: measurements.fault_led_off
+        - key: buzzer
+          type: switch
+          label: "Buzzer chirped once"
+          required: true
+          bind: measurements.buzzer_heard
+    measurements:
+      - name: Status LED Seen
+        key: status_led_seen
+        description: Operator switch, bound straight to this measurement.
+        validators:
+          - {operator: "==", expected_value: true}
+      - name: Fault LED Off
+        key: fault_led_off
+        validators:
+          - {operator: "==", expected_value: true}
+      - name: Buzzer Heard
+        key: buzzer_heard
+        validators:
+          - {operator: "==", expected_value: true}
+      - name: Status LED Photodiode
+        key: status_led_mv
+        unit: mV
+        validators:
+          - {operator: ">=", expected_value: 300.0}
+      - name: Fault LED Photodiode
+        key: fault_led_mv
+        unit: mV
+        validators:
+          - {operator: "<=", expected_value: 20.0}
+
+  - name: Sleep Current
+    key: sleep_current
+    python: phases.sleep_current
+    depends_on: [gpio_loopback, analog_linearity, operator_checks]
+    measurements:
+      - name: Stop Mode Entered
+        key: stop_mode_entered
+        validators:
+          - {operator: "==", expected_value: true}
+      - name: Sleep Current
+        key: sleep_current
+        unit: µA
+        description: Stop-mode current on the low-range shunt; a floating GPIO or an ungated clock shows up here.
+        validators:
+          - {operator: "<=", expected_value: 15.0}
+
+teardown:
+  - name: Power Down
+    key: power_down
+    python: phases.power_down
+    measurements:
+      - name: Vin Off
+        key: vin_off
+        unit: V
+        validators:
+          - {operator: "<=", expected_value: 0.1}
